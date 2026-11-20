@@ -1,0 +1,713 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Carregamento seguro da biblioteca UI
+local okLib, redzlib = pcall(function()
+	return loadstring(game:HttpGet("https://raw.githubusercontent.com/tbao143/Library-ui/refs/heads/main/Redzhubui"))()
+end)
+
+if not okLib or not redzlib then
+	warn("Falha ao carregar a biblioteca RedzLib. Verifique sua conexão ou executor.")
+	return
+end
+
+local Window = redzlib:MakeWindow({
+	Title = "Slayer Hub  |  by Bizivita and Rick",
+	SubTitle = "Brookhaven RP",
+	SaveFolder = "SlayerHub_Config"
+})
+
+Window:AddMinimizeButton({
+	Button = { Image = "rbxassetid://71014873973869", BackgroundTransparency = 0 },
+	Corner = { CornerRadius = UDim.new(0, 6) }
+})
+
+-- Funções auxiliares seguras
+local function GetChar()
+	return LocalPlayer.Character
+end
+
+local function GetHRP()
+	local c = GetChar()
+	return c and c:FindFirstChild("HumanoidRootPart")
+end
+
+local function GetHum()
+	local c = GetChar()
+	return c and c:FindFirstChildOfClass("Humanoid")
+end
+
+local function FindRemote(name)
+	local re = ReplicatedStorage:FindFirstChild("RE")
+	if re and re:FindFirstChild(name) then
+		return re:FindFirstChild(name)
+	end
+	for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
+		if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and obj.Name == name then
+			return obj
+		end
+	end
+	return nil
+end
+
+local function FireRE(remoteName, ...)
+	local r = FindRemote(remoteName)
+	if r and r:IsA("RemoteEvent") then
+		pcall(function(...)
+			r:FireServer(...)
+		end, ...)
+	end
+end
+
+local function InvokeRF(remoteName, ...)
+	local r = FindRemote(remoteName)
+	if r and r:IsA("RemoteFunction") then
+		pcall(function(...)
+			r:InvokeServer(...)
+		end, ...)
+	end
+end
+
+local function GiveTool(toolName)
+	FireRE("1Clea1rTool1s", "ClearAllTools")
+	task.wait(0.1)
+	InvokeRF("1Too1l", "PickingTools", toolName)
+end
+
+-- Estado global centralizado (evita vários loops pesados)
+local State = {
+	SelectedPlayer = nil,
+	KillMethod = "Ball",
+	KillActive = false,
+	FlingActive = false,
+	FlingAllActive = false,
+	OrbitActive = false,
+	SpectateActive = false,
+	DoorsAuraActive = false,
+	CarSpeed = 120,
+	TurboPower = 50000,
+	FlyCarActive = false,
+	PullCarsActive = false,
+	PlateText = "SLAYER",
+	PlateLoopActive = false,
+	AudioId = "92411025363290",
+	LoopAudioActive = false,
+	RGBSpeed = 5,
+	RGBNameBio = false,
+	RGBName = false,
+	RGBBio = false,
+	RGBChar = false,
+	RGBHair = false,
+	AntiSit = false,
+	AntiVoid = false,
+	AntiCollision = false
+}
+
+local SavedOutfits = {}
+local FavoriteMusics = {}
+
+local function GetPlayerNames()
+	local list = {}
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= LocalPlayer then
+			table.insert(list, plr.Name)
+		end
+	end
+	return list
+end
+
+local function GetPlayerByQuery(q)
+	if not q or q == "" then return nil end
+	local lower = q:lower()
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= LocalPlayer then
+			if plr.Name:lower():find(lower, 1, true) or plr.DisplayName:lower():find(lower, 1, true) then
+				return plr
+			end
+		end
+	end
+	return nil
+end
+
+local function FlingTarget(target)
+	if not target or not target.Character then return end
+	local tHRP = target.Character:FindFirstChild("HumanoidRootPart")
+	local tHum = target.Character:FindFirstChildOfClass("Humanoid")
+	local myHRP = GetHRP()
+	local myHum = GetHum()
+	if not tHRP or not myHRP or not myHum then return end
+	if tHum and tHum.Sit then return end
+
+	pcall(function()
+		myHum:ChangeState(Enum.HumanoidStateType.Physics)
+		myHRP.CFrame = tHRP.CFrame * CFrame.new(0, 0, -1)
+		myHRP.AssemblyLinearVelocity = Vector3.new(85000, 85000, 85000)
+		myHRP.AssemblyAngularVelocity = Vector3.new(850000, 850000, 850000)
+	end)
+end
+
+local function PlayLocalOrRemoteSound(id)
+	local clean = tostring(id or ""):gsub("%D", "")
+	if clean == "" then return end
+	local asset = "rbxassetid://" .. clean
+
+	FireRE("1Gu1i", "newSound", "GlobalSound", Workspace, asset, 1, 10, false)
+
+	local hrp = GetHRP()
+	if hrp then
+		local prev = hrp:FindFirstChild("SlayerSound")
+		if prev then prev:Destroy() end
+
+		local snd = Instance.new("Sound")
+		snd.Name = "SlayerSound"
+		snd.SoundId = asset
+		snd.Volume = 2
+		snd.Parent = hrp
+		pcall(function() snd:Play() end)
+	end
+end
+
+local function StopSounds()
+	for _, obj in ipairs(Workspace:GetDescendants()) do
+		if obj:IsA("Sound") and obj.Name == "SlayerSound" then
+			pcall(function() obj:Stop() end)
+			obj:Destroy()
+		end
+	end
+end
+
+-- ==========================================
+-- 1. OPTIONS NEWS & INFORMATIONS
+-- ==========================================
+local TabNews = Window:MakeTab({ Name = "Options News", Icon = "rbxassetid://10723415903" })
+TabNews:AddSection({ Name = "Novidades" })
+TabNews:AddParagraph({
+	Title = "Slayer Hub - Atualizado",
+	Content = "Script otimizado para Brookhaven RP com controles estáveis, veículos, áudio, RGB, proteções e shaders."
+})
+
+local TabInfo = Window:MakeTab({ Name = "Informations", Icon = "rbxassetid://10723415903" })
+TabInfo:AddSection({ Name = "Créditos" })
+TabInfo:AddParagraph({ Title = "Slayer Hub", Content = "by Bizivita and Rick\nBrookhaven RP" })
+
+-- ==========================================
+-- 2. TROLL PLAYERS
+-- ==========================================
+local TabTroll = Window:MakeTab({ Name = "Troll Players", Icon = "rbxassetid://10734950309" })
+TabTroll:AddSection({ Name = "Options Players" })
+
+local DropMain = TabTroll:AddDropdown({
+	Name = "Select Player",
+	Options = GetPlayerNames(),
+	Default = "",
+	Callback = function(v)
+		State.SelectedPlayer = GetPlayerByQuery(v)
+	end
+})
+
+TabTroll:AddButton({
+	Name = "Refresh Player List",
+	Callback = function()
+		DropMain:Set(GetPlayerNames())
+	end
+})
+
+TabTroll:AddButton({
+	Name = "Teleport to Player",
+	Callback = function()
+		local hrp = GetHRP()
+		local target = State.SelectedPlayer
+		if hrp and target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+			hrp.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+		end
+	end
+})
+
+TabTroll:AddToggle({
+	Name = "Spectate Player",
+	Default = false,
+	Callback = function(v)
+		State.SpectateActive = v
+		if not v then
+			local myHum = GetHum()
+			if myHum then Workspace.CurrentCamera.CameraSubject = myHum end
+		end
+	end
+})
+
+TabTroll:AddSection({ Name = "Methods" })
+TabTroll:AddDropdown({
+	Name = "Select Kill method",
+	Options = { "Ball", "Couch", "Bus", "Boat", "Car" },
+	Default = "Ball",
+	Callback = function(v) State.KillMethod = v end
+})
+
+TabTroll:AddToggle({
+	Name = "Kill Player",
+	Default = false,
+	Callback = function(v) State.KillActive = v end
+})
+
+TabTroll:AddToggle({
+	Name = "Auto Fling",
+	Default = false,
+	Callback = function(v) State.FlingActive = v end
+})
+
+TabTroll:AddSection({ Name = "Aura" })
+TabTroll:AddToggle({
+	Name = "Doors Aura",
+	Default = false,
+	Callback = function(v) State.DoorsAuraActive = v end
+})
+
+TabTroll:AddSection({ Name = "All methods" })
+for _, mName in ipairs({ "Kill all Bus", "Mouse Ban Kill all", "Fling Boat All", "Auto Fling All", "Fling Ball All" }) do
+	TabTroll:AddToggle({
+		Name = mName,
+		Default = false,
+		Callback = function(v) State.FlingAllActive = v end
+	})
+end
+
+TabTroll:AddSection({ Name = "Funções Extras Fling" })
+TabTroll:AddToggle({
+	Name = "Fata Fling (Best)",
+	Default = false,
+	Callback = function(v) State.FlingActive = v end
+})
+TabTroll:AddToggle({
+	Name = "Black Hole Fling player",
+	Default = false,
+	Callback = function(v) State.FlingActive = v end
+})
+TabTroll:AddToggle({
+	Name = "Gravity Orbit",
+	Default = false,
+	Callback = function(v) State.OrbitActive = v end
+})
+
+-- ==========================================
+-- 3. VEHICLES
+-- ==========================================
+local TabVehicles = Window:MakeTab({ Name = "Vehicles", Icon = "rbxassetid://10709782497" })
+TabVehicles:AddSection({ Name = "Speed Car Functions" })
+
+TabVehicles:AddTextBox({
+	Name = "Car Speed",
+	Default = "",
+	PlaceholderText = "Ex: 120",
+	Callback = function(v) State.CarSpeed = tonumber(v) or 120 end
+})
+
+TabVehicles:AddTextBox({
+	Name = "Turbo Power",
+	Default = "",
+	PlaceholderText = "Ex: 50000",
+	Callback = function(v) State.TurboPower = tonumber(v) or 50000 end
+})
+
+local function GetSeat()
+	local hum = GetHum()
+	if hum and hum.SeatPart and hum.SeatPart:IsA("VehicleSeat") then
+		return hum.SeatPart
+	end
+	return nil
+end
+
+TabVehicles:AddButton({
+	Name = "Apply Speed",
+	Callback = function()
+		local seat = GetSeat()
+		if seat then seat.MaxSpeed = State.CarSpeed end
+	end
+})
+
+TabVehicles:AddButton({
+	Name = "Apply turbo",
+	Callback = function()
+		local seat = GetSeat()
+		if seat then
+			seat.Torque = State.TurboPower
+			seat.AssemblyLinearVelocity = seat.CFrame.LookVector * State.CarSpeed
+		end
+	end
+})
+
+TabVehicles:AddSection({ Name = "all car functions" })
+TabVehicles:AddToggle({
+	Name = "Puxar todos os carros do server",
+	Default = false,
+	Callback = function(v) State.PullCarsActive = v end
+})
+
+TabVehicles:AddButton({
+	Name = "Trazer todos os carros do servidor para sua posição",
+	Callback = function()
+		local hrp = GetHRP()
+		local folder = Workspace:FindFirstChild("Vehicles")
+		if hrp and folder then
+			for _, car in ipairs(folder:GetChildren()) do
+				pcall(function()
+					car:PivotTo(hrp.CFrame * CFrame.new(math.random(-10, 10), 2, math.random(-10, 10)))
+				end)
+			end
+		end
+	end
+})
+
+TabVehicles:AddToggle({
+	Name = "Fly Car",
+	Default = false,
+	Callback = function(v) State.FlyCarActive = v end
+})
+
+-- ==========================================
+-- 4. FUN REMAKE
+-- ==========================================
+local TabFun = Window:MakeTab({ Name = "Fun Remake", Icon = "rbxassetid://10734949856" })
+TabFun:AddSection({ Name = "Placa" })
+
+TabFun:AddTextBox({
+	Name = "Texto",
+	Default = "",
+	PlaceholderText = "Texto da placa",
+	Callback = function(v) State.PlateText = v end
+})
+
+TabFun:AddToggle({
+	Name = "Placa troca all",
+	Default = false,
+	Callback = function(v) State.PlateLoopActive = v end
+})
+
+TabFun:AddSection({ Name = "Celular para Músicas" })
+TabFun:AddButton({
+	Name = "Celular",
+	Callback = function() GiveTool("Phone") end
+})
+
+-- ==========================================
+-- 5. SOUND ALL & 6. MUSIC
+-- ==========================================
+local TabSoundAll = Window:MakeTab({ Name = "Sound All", Icon = "rbxassetid://10734966248" })
+TabSoundAll:AddTextBox({
+	Name = "Insira o ID do Áudio All",
+	Default = "",
+	PlaceholderText = "Exemplo: 1234567890",
+	Callback = function(v) State.AudioId = v end
+})
+
+TabSoundAll:AddButton({
+	Name = "Tocar Som Global",
+	Callback = function() PlayLocalOrRemoteSound(State.AudioId) end
+})
+
+TabSoundAll:AddToggle({
+	Name = "Loop Som Global",
+	Default = false,
+	Callback = function(v) State.LoopAudioActive = v end
+})
+
+local Memes = {
+	["Trollface laugh"] = "6823597327",
+	["Vine Boom"] = "6308606116",
+	["Bruh"] = "4275842574",
+	["Grito"] = "138081500"
+}
+local SelectedMeme = "Trollface laugh"
+
+TabSoundAll:AddDropdown({
+	Name = "Memes Sons Globais",
+	Options = { "Trollface laugh", "Vine Boom", "Bruh", "Grito" },
+	Default = "Trollface laugh",
+	Callback = function(v) SelectedMeme = v end
+})
+
+TabSoundAll:AddButton({
+	Name = "Tocar Som Selecionado",
+	Callback = function() PlayLocalOrRemoteSound(Memes[SelectedMeme]) end
+})
+
+local TabMusic = Window:MakeTab({ Name = "Music", Icon = "rbxassetid://10734905958" })
+local MusicBox = TabMusic:AddTextBox({
+	Name = "ID da música",
+	Default = "92411025363290",
+	PlaceholderText = "Cole o ID",
+	Callback = function(v) State.AudioId = v end
+})
+
+local Songs = {
+	["pgd e VQ"] = "92411025363290",
+	["funk brabo"] = "1837879082",
+	["Forró Estourado"] = "1845554017",
+	["Mts Hot Chavão Gp"] = "1841647093",
+	["Mandela"] = "1836789123",
+	["Murder In My Mind"] = "9045766377"
+}
+
+local SongNames = {}
+for k in pairs(Songs) do table.insert(SongNames, k) end
+
+TabMusic:AddDropdown({
+	Name = "Músicas",
+	Options = SongNames,
+	Default = SongNames[1] or "",
+	Callback = function(v)
+		if Songs[v] then
+			State.AudioId = Songs[v]
+			MusicBox:Set(State.AudioId)
+		end
+	end
+})
+
+TabMusic:AddButton({
+	Name = "Pôr som e id",
+	Callback = function() PlayLocalOrRemoteSound(State.AudioId) end
+})
+
+TabMusic:AddButton({
+	Name = "Parar Todas Músicas",
+	Callback = StopSounds
+})
+
+-- ==========================================
+-- 7. RGBS
+-- ==========================================
+local TabRGB = Window:MakeTab({ Name = "Rgbs", Icon = "rbxassetid://10734923549" })
+TabRGB:AddSlider({
+	Name = "Velocidade RGB",
+	Min = 1,
+	Max = 20,
+	Default = 5,
+	Increment = 1,
+	Callback = function(v) State.RGBSpeed = v end
+})
+
+TabRGB:AddToggle({ Name = "Nome + Bio RGB", Default = false, Callback = function(v) State.RGBNameBio = v end })
+TabRGB:AddToggle({ Name = "Nome RGB", Default = false, Callback = function(v) State.RGBName = v end })
+TabRGB:AddToggle({ Name = "Bio RGB", Default = false, Callback = function(v) State.RGBBio = v end })
+TabRGB:AddToggle({ Name = "RGB Character", Default = false, Callback = function(v) State.RGBChar = v end })
+TabRGB:AddToggle({ Name = "RGB Hair", Default = false, Callback = function(v) State.RGBHair = v end })
+
+-- ==========================================
+-- 8. ITEMS
+-- ==========================================
+local TabItems = Window:MakeTab({ Name = "Items", Icon = "rbxassetid://10709782497" })
+local Items = {
+	{ "Planador", "Glider" },
+	{ "Caixão", "Coffin" },
+	{ "Bola de Basquete Dourada", "GoldenBasketball" },
+	{ "Balão de Água", "WaterBalloon" },
+	{ "Lançador de Oro", "GoldLauncher" },
+	{ "Cristal verde", "GreenCrystal" },
+	{ "Serra Elétrica", "Chainsaw" },
+	{ "Ski", "Ski" },
+	{ "Money Gun", "MoneyGun" },
+	{ "Snowboard", "Snowboard" }
+}
+for _, item in ipairs(Items) do
+	TabItems:AddButton({ Name = item[1], Callback = function() GiveTool(item[2]) end })
+end
+
+-- ==========================================
+-- 9. HOUSE & 10. PROTEÇÕES
+-- ==========================================
+local TabHouse = Window:MakeTab({ Name = "House", Icon = "rbxassetid://10723407389" })
+TabHouse:AddButton({
+	Name = "Bypass Props / Remove Ban All Houses",
+	Callback = function()
+		for _, obj in ipairs(Workspace:GetDescendants()) do
+			if obj:IsA("BasePart") and (obj.Name:lower():find("ban") or obj.Name:lower():find("barrier")) then
+				obj.CanCollide = false
+				obj.Transparency = 1
+			end
+		end
+	end
+})
+
+local TabProt = Window:MakeTab({ Name = "Proteções", Icon = "rbxassetid://10734951847" })
+TabProt:AddToggle({ Name = "Anti Sit", Default = false, Callback = function(v) State.AntiSit = v end })
+TabProt:AddToggle({ Name = "Anti Void", Default = false, Callback = function(v) State.AntiVoid = v end })
+TabProt:AddToggle({ Name = "Anti Collision / Anti Fling", Default = false, Callback = function(v) State.AntiCollision = v end })
+
+-- ==========================================
+-- 11. AVATAR & 12. NAME AND BIO
+-- ==========================================
+local TabAvatar = Window:MakeTab({ Name = "Avatar", Icon = "rbxassetid://10747373176" })
+TabAvatar:AddButton({
+	Name = "Copy Avatar",
+	Callback = function()
+		local target = State.SelectedPlayer
+		local hum = GetHum()
+		if target and hum then
+			local ok, desc = pcall(function()
+				return Players:GetHumanoidDescriptionFromUserId(target.UserId)
+			end)
+			if ok and desc then
+				FireRE("1Updat1eAvata1r", "wear", desc)
+				pcall(function() hum:ApplyDescription(desc) end)
+			end
+		end
+	end
+})
+
+local TabNameBio = Window:MakeTab({ Name = "Name and Bio", Icon = "rbxassetid://10734950309" })
+local NameVal, BioVal = "", ""
+TabNameBio:AddTextBox({ Name = "Nome RP", Default = "", PlaceholderText = "Digite seu nome...", Callback = function(v) NameVal = v end })
+TabNameBio:AddButton({ Name = "Setar Nome", Callback = function() FireRE("1RPNam1eTex1t", "RolePlayName", NameVal) end })
+TabNameBio:AddTextBox({ Name = "Bio RP", Default = "", PlaceholderText = "Digite sua bio...", Callback = function(v) BioVal = v end })
+TabNameBio:AddButton({ Name = "Setar Bio", Callback = function() FireRE("1RPNam1eTex1t", "RolePlayBio", BioVal) end })
+
+-- ==========================================
+-- 15. SHADERS
+-- ==========================================
+local TabShaders = Window:MakeTab({ Name = "Shaders", Icon = "rbxassetid://10734966248" })
+TabShaders:AddToggle({
+	Name = "Enable Shaders",
+	Default = false,
+	Callback = function(v)
+		Lighting.Brightness = v and 2.2 or 1
+		Lighting.GlobalShadows = v
+	end
+})
+
+TabShaders:AddToggle({
+	Name = "Bloom",
+	Default = false,
+	Callback = function(v)
+		local b = Lighting:FindFirstChild("SlayerBloom")
+		if v and not b then
+			b = Instance.new("BloomEffect")
+			b.Name = "SlayerBloom"
+			b.Parent = Lighting
+		elseif not v and b then
+			b:Destroy()
+		end
+	end
+})
+
+TabShaders:AddToggle({
+	Name = "Black",
+	Default = false,
+	Callback = function(v)
+		local cc = Lighting:FindFirstChild("SlayerBlack")
+		if not cc then
+			cc = Instance.new("ColorCorrectionEffect")
+			cc.Name = "SlayerBlack"
+			cc.Parent = Lighting
+		end
+		cc.Saturation = v and -1 or 0
+	end
+})
+
+-- ==========================================
+-- LOOP ÚNICO DE EXECUÇÃO (LEVE E ESTÁVEL)
+-- ==========================================
+local hue = 0
+local orbitAngle = 0
+local timer = 0
+
+RunService.Heartbeat:Connect(function(dt)
+	timer += dt
+	hue = (hue + dt * (State.RGBSpeed * 0.08)) % 1
+	local col = Color3.fromHSV(hue, 1, 1)
+
+	local hrp = GetHRP()
+	local hum = GetHum()
+	local char = GetChar()
+
+	-- Proteções
+	if State.AntiSit and hum then
+		hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+		if hum.Sit then hum.Sit = false end
+	end
+
+	if State.AntiVoid and hrp and hrp.Position.Y < -85 then
+		hrp.AssemblyLinearVelocity = Vector3.zero
+		hrp.CFrame = CFrame.new(0, 20, 0)
+	end
+
+	if State.AntiCollision then
+		for _, plr in ipairs(Players:GetPlayers()) do
+			if plr ~= LocalPlayer and plr.Character then
+				for _, p in ipairs(plr.Character:GetDescendants()) do
+					if p:IsA("BasePart") then p.CanCollide = false end
+				end
+			end
+		end
+	end
+
+	-- Spectate
+	if State.SpectateActive and State.SelectedPlayer and State.SelectedPlayer.Character then
+		local tHum = State.SelectedPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if tHum then Workspace.CurrentCamera.CameraSubject = tHum end
+	end
+
+	-- Fling / Kill / Orbit
+	if (State.KillActive or State.FlingActive) and State.SelectedPlayer then
+		FlingTarget(State.SelectedPlayer)
+	elseif State.OrbitActive and hrp and State.SelectedPlayer and State.SelectedPlayer.Character then
+		local tHRP = State.SelectedPlayer.Character:FindFirstChild("HumanoidRootPart")
+		if tHRP then
+			orbitAngle += dt * 5
+			hrp.CFrame = tHRP.CFrame * CFrame.new(math.cos(orbitAngle) * 7, 1.5, math.sin(orbitAngle) * 7)
+		end
+	end
+
+	if State.FlingAllActive then
+		for _, plr in ipairs(Players:GetPlayers()) do
+			if plr ~= LocalPlayer then
+				FlingTarget(plr)
+			end
+		end
+	end
+
+	-- Fly Car
+	if State.FlyCarActive then
+		local seat = GetSeat()
+		if seat then
+			seat.AssemblyLinearVelocity = Workspace.CurrentCamera.CFrame.LookVector * State.CarSpeed
+		end
+	end
+
+	-- Ações periódicas (a cada ~0.35s)
+	if timer >= 0.35 then
+		timer = 0
+
+		if State.DoorsAuraActive and hrp then
+			for _, cd in ipairs(Workspace:GetDescendants()) do
+				if cd:IsA("ClickDetector") and cd.Parent and cd.Parent:IsA("BasePart") then
+					if (cd.Parent.Position - hrp.Position).Magnitude <= 22 then
+						pcall(fireclickdetector, cd)
+					end
+				end
+			end
+		end
+
+		if State.PullCarsActive and hrp then
+			local vFolder = Workspace:FindFirstChild("Vehicles")
+			if vFolder then
+				for _, car in ipairs(vFolder:GetChildren()) do
+					pcall(function()
+						car:PivotTo(hrp.CFrame * CFrame.new(math.random(-10, 10), 2, -8))
+					end)
+				end
+			end
+		end
+
+		if State.PlateLoopActive then
+			FireRE("1Player1sCa1r", "PickingCarPlateText", State.PlateText)
+		end
+
+		if State.LoopAudioActive then
+			PlayLocalOrRemoteSound(State.AudioId)
+		end
+
+		if State.RGBNameBio o
